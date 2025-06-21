@@ -1,7 +1,7 @@
-// ***************
+// *******************
 //
 // SPICEnet Data Link Protocol
-// 
+// Driver for serial over RS422
 //
 // *******************
 
@@ -23,49 +23,45 @@
 int APID = 0x000;
 uint8_t SYNC[] = {0x0D, 0xEC, 0x0AF, 0x00};
 
-//connect
-//listen
-//send
-//read
-//etc
-
 // Opens the serial port for reading and writing
-// returns 1 or 0
+// returns 0 on success or -1 and updates errno on failure
 int sndlp_open(int *fd, char *portname)
 {
     struct termios tty;
 
-    // 1. Open the serial port
+    // open the serial port
     *fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (*fd == -1) {
-        //perror("Error opening serial port");
+        // perror("Error opening serial port");
         return -1;
     }
 
-    // 2. Configure the serial port
-    if (tcgetattr(*fd, &tty) != 0) {
+    // configure the serial port
+    if (tcgetattr(*fd, &tty) != 0) 
+    {
         //perror("Error getting serial port attributes");
         close(*fd);
         return -1;
     }
 
-    // 3. Set baud rate to 115200
+    // set baud rate to 115200
     cfsetospeed(&tty, B115200);  // Set output speed
     cfsetispeed(&tty, B115200);  // Set input speed
 
-    // 4. Set 8N1: 8 data bits, no parity, 1 stop bit
+    // set 8N1: 8 data bits, no parity, 1 stop bit
     tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8 data bits
     tty.c_cflag &= ~PARENB;                         // No parity
     tty.c_cflag &= ~CSTOPB;                         // 1 stop bit
     tty.c_cflag |= CREAD | CLOCAL;                  // Enable receiver and ignore modem control lines
 
-    // 5. Set raw input mode
+    // set raw input mode
     tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // Raw input
     tty.c_iflag &= ~(IXON | IXOFF | IXANY);         // No software flow control
     tty.c_oflag &= ~OPOST;                          // Raw output
 
-    // 6. Apply the settings immediately
-    if (tcsetattr(*fd, TCSANOW, &tty) != 0) {
+    // apply the settings
+    if (tcsetattr(*fd, TCSANOW, &tty) != 0) 
+    {
         perror("Error setting serial port attributes");
         close(*fd);
         return -1;
@@ -75,6 +71,9 @@ int sndlp_open(int *fd, char *portname)
 }
 
 // verfies a connection to the other device
+// returns 0 on success or an error code on failure
+
+// TODO ensure config settings match
 int sndlp_connect(int fd)
 {
     int ret = 0;
@@ -102,10 +101,11 @@ int sndlp_connect(int fd)
     
     if(ret) return ret;
     
-    
     return 0;
 }
 
+// writes to the open file
+// returns the number of user data bytes written (not including spp header), or -1 on error
 int sndlp_write(int fd, int apid, void *buf, int size)
 {
     spp_packet_t *packets;
@@ -123,7 +123,7 @@ int sndlp_write(int fd, int apid, void *buf, int size)
         if(size < 0) 
         {
             spp_free_packets(packets, num_packs);
-            return -1;
+            return size;
         }
         written += size;
     }

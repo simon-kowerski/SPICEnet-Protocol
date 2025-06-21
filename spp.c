@@ -1,12 +1,11 @@
-// ***************
+// *******************
 //
+// SPICEnet Data Link Protocol
 // Space Packet Protocol
-// Responsible for building and decoding packets
+// CCSDS Standard
 //
 // *******************
 
-//TODO: error codes YAY
-//TODO: test multithreaded
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -18,7 +17,7 @@
 
 struct spp_globals
 {
-    int seq_counts[2048];
+    int seq_counts[MAX_APID];
     pthread_mutex_t mutex;
 } globals;
 
@@ -43,7 +42,7 @@ unsigned int get_seq_count(unsigned int apid)
     return ret;
 }
 
-void init_spp()
+void spp_init()
 {
     for(int i = 0; i < 2048; i++)
     {
@@ -102,11 +101,6 @@ void spp_octet_conv(spp_packet_t *packet, void **octet_string, int *size)
     {
         (* (uint8_t **) octet_string)[i] = ((uint8_t *) packet->data)[i-6];
     }
-
-    /*for(int i = 0; i < *size; i++)
-    {
-        printf("%04b", (* (uint8_t **) octet_string)[i] );
-    }*/
 }
 
 // builds new packets from user data and given parameters

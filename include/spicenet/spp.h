@@ -14,7 +14,7 @@ typedef struct space_packet
 } spp_packet_t;
 
 
-void init_spp();
+void spp_init();
 
 void spp_free_packets(spp_packet_t *packet, int length);
 void spp_read_header(void *header_content, spp_packet_t *packet);

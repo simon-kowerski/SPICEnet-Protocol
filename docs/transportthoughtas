@@ -1,0 +1,27 @@
+// poll for incoming packet OR send request
+
+// if recieved an incoming packet
+    // check if its a valid packet
+    // if not request it again
+    // check if its the next one in sequence
+    // if not request it again
+    // maybe ack
+    // then forward the data to the proper port/APID
+    
+// when sending a packet
+    // encapsulate data with some sort of counter and crc bit
+    // forward to sndlp
+
+
+
+
+
+// call connect - transport layer
+    // throws an error if network isn't initalized
+    // give it your apid
+    // returns a fd you can read from and write to for application specific data
+
+
+
+// when users write to their fds it will get caught by a poll and then sent by the send client
+// when data comes in for a specific apid it will get written to the fd for that apid, or discarded if one is not open

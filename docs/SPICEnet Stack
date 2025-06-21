@@ -1,0 +1,40 @@
+Application Layer 
+- all of the applications
+- main application is the 
+
+Presentation Layer
+- Not implemented
+- Compression and Encryption
+- Probably to be impemented by applications
+
+SPICEnet Session Protocol (SNSP)
+- Provide a user interface for network interface (API)
+- read, write, connect (open AND verify connection - to replace sndlp_connect)
+    - sends to transport protocol first
+    - not going to be doing a lot of the work on its own, simiply to make it look nicer
+- init() which will initialize the entire protocol in the main thread
+    - call spp_init
+    - 
+
+SPICEnet Transport Protocol (SNTP)
+- When reading, ensure all packets are recieved and correct
+- Request retransmission
+- Maintain records of all packets that may need to be retransmitted
+    - Records removed when it is known they have been recieved
+- Maybe similar to COP-1 idk
+- Will need to ensapuslate packets further before sending it to sndlp
+    - include crc checks and others 
+- SPICEnet Driver (APID 1) 
+    - Responsible for all reading all network traffic, and relaying the data to other APIDs
+
+Network Layer 
+- None
+
+SPICEnet Data Link Protocol SPDLP
+- Open connection (sndlp_open)
+- Read data (sndlp_read)
+- Write data (sndlp_write)
+- Packetization (ccsds spp)
+
+Physical Layer
+- RS422 serial
