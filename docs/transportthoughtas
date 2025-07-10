@@ -1,5 +1,6 @@
 // poll for incoming packet OR send request
 
+
 // if recieved an incoming packet
     // check if its a valid packet
     // if not request it again
@@ -25,3 +26,10 @@
 
 // when users write to their fds it will get caught by a poll and then sent by the send client
 // when data comes in for a specific apid it will get written to the fd for that apid, or discarded if one is not open
+
+
+// ******************
+//have a lock for reading and a lock for writing so that you can ensure all data is read or written in order
+// ******************
+
+

@@ -4,88 +4,138 @@
 //
 // *******************
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 #include <poll.h>
+#include <signal.h>
+#include <sys/wait.h>
 
+#include <spicenet/sntp.h>
 #include <spicenet/sndlp.h>
 #include <spicenet/config.h>
 
+#define APID 0x001
 #define HEAD_SIZE 4
 #define TAIL_SIZE 1
 
-typedef struct threadsafe_fd //TODO maybe take this out of the struct, make multiple global variables could be easier
-{
-    int fd;
-    pthread_mutex_t *mutex;
-} sntp_fd_t;
-
+//TODO don't forget to wait for child processes
 //TODO have a way to get rid of inactive apps, maybe see if the fd has closed
-// snp_write and snp_read will take this struct as an argument
-typedef struct app
-{
-    int read[2];
-    int write; // will be the write end of 
-    pthread_mutex_t *mutex;
-} sntp_app_t; //can be defined as something different for the user
 
-sntp_fd_t fd;
-int writefds[2]; // TODO give a mutex
+// how you read to and write from the port
+int fd;
+pthread_t receive_tid;
+pthread_mutex_t *fd_mutex;
+
+// for user programs to write to
+int write_fds[2];
+pthread_mutex_t *write_mutex;
+
+// list of running apps
 sntp_app_t *running_apps;
 
-void sntp_init()
+unsigned char crc8(void *buf, int length);
+
+// ** FUNCTION DEFINITIONS BEGIN ** 
+
+
+/* handlers if i want
+void reap(int signum)
 {
-    //initialzie all mutexs and such
-    //create thread for out_client
-    //create thread for in_client
+     pid_t pid = 1;
+     while(pid > 0)
+     {
+          pid = waitpid(-1, NULL, WNOHANG);
+          if(pid > 0)
+          {
+               //process ended
+          }
+     }
 }
 
-//in a thread
-void sntp_transmit_client(void *arg)
+void install_handlers(void)
+{
+    struct sigaction act;
+    act.sa_handler = reap;
+    act.sa_flags = SA_RESTART;
+    sigaction(SIGCHLD, &act, NULL);
+}*/
+
+// gives client apps a sntp_app_t struct required to use SNTP
+int sntp_connect(int apid, sntp_app_t **app)
+{
+    *app = malloc(sizeof(sntp_app_t));
+    int ret = pipe((*app)->read);
+    if(ret) return ret;
+    (*app)->apid = apid;
+    ret = sntp_app_insert(*app);
+    if(ret) return ret;
+    pthread_mutex_init((*app)->mutex, NULL);
+    pthread_cond_init((*app)->read_ready, NULL);
+    return 0;
+}
+
+// close
+// does free the app structure
+int sntp_close(sntp_app_t *app)
+{
+    sntp_app_remove(app->apid);
+    free(app);
+    return 0;
+}
+
+// allows client apps to send data to SNTP
+int sntp_transmit(sntp_app_t *app, void *buf, int size)
+{
+    pthread_mutex_lock(fd_mutex);
+    int ret = sntp_write(write_fds[0], app->apid, buf, size);
+    pthread_mutex_unlock(fd_mutex);
+    return ret;
+}
+
+// listens for incoming traffic on the connection
+// in its own thread 
+void sntp_receive_client(void *arg)
 {
     struct pollfd pollfds[1];
-    pollfds[0].fd = writefds[0];
+    pollfds[0].fd = fd;
     pollfds[0].events = POLLIN;
 
-    sndlp_data_t recieved;
+    sndlp_data_t received;
+    sntp_app_t *app;
 
     while(1)
     {
         poll(pollfds, 1, -1);
 
-        pthread_mutex_lock(fd.mutex);
-        //sntp_write();
-        pthread_mutex_unlock(fd.mutex);
+        int size = sndlp_read(fd, &received);
+        if(size <= 0) continue;
 
-        // check validity of packet
-        // request retransmission if necessary
+        int header = * ((int *) received.data);
+        void *data = &(received.data[HEAD_SIZE]);
+        char crc = *((char *) &(received.data[HEAD_SIZE + size]));
+
+        // TODO check validity of packet
+            //todo
+
+        // TODO request retransmission if necessary
+            //todo
+
         // send to appropriate apid
+        // TODO maybe start another thread for the below
+        app = sntp_app_find(received.apid);
+        pthread_mutex_lock(app->mutex);
+        write(app->read[1], data, received.size - HEAD_SIZE - TAIL_SIZE);
+        pthread_cond_signal(app->read_ready);
+        pthread_mutex_unlock(app->mutex);
     }
 }
 
-//in a thread
-void sntp_recieve_client(void *arg)
-{
-    struct pollfd pollfds[1];
-    pollfds[0].fd = fd.fd;
-    pollfds[0].events = POLLIN;
-
-    sndlp_data_t recieved;
-
-    while(1)
-    {
-        poll(pollfds, 1, -1);
-
-        sndlp_read(fd.fd, &recieved);
-        // check validity of packet
-        // request retransmission if necessary
-        // send to appropriate apid
-    }
-}
-
+// forwards the SNTP packet to SNDLP
 int sntp_write(int fd, int apid, void *buf, int size)
 {
     int write_size = size + HEAD_SIZE + TAIL_SIZE;
@@ -94,17 +144,27 @@ int sntp_write(int fd, int apid, void *buf, int size)
     char crc = crc8(buf, size);
     
     //TODO write value at the beginning
-    memcpy(write_buf[4], buf, size);
-    memcpy(write_buf[4+size], crc, 1);
+    memcpy(&write_buf[HEAD_SIZE], buf, size);
+    memcpy(&write_buf[HEAD_SIZE + size], crc, 1);
 
     return sndlp_write(fd, apid, write_buf, write_size) - (HEAD_SIZE + TAIL_SIZE);
+}
+
+// initlizes global mutexes and starts threads
+void sntp_start(int fd)
+{
+    pthread_mutex_init(fd_mutex, NULL);
+    pthread_mutex_init(write_mutex, NULL);
+    pipe(write_fds);
+    int error = pthread_create(&receive_tid, NULL, sntp_receive_client, NULL);
+    if (error); //TODO error message maybe
+    //install_handlers();
 }
 
 #define POLYNOMIAL (0x1070U << 3)
 // code provided by BCT
 unsigned char crc8(void *buf, int length)
 {
-    // unsigned char crcData[DATA_LENGTH] = {0x1A, 0xCF, 0x10, 0x00, 0x00, 0x04, 1, 2, 3, 4};
     unsigned char *inData = &buf[0];
     unsigned short data;
     unsigned char crc = 0xFF;
@@ -124,6 +184,8 @@ unsigned char crc8(void *buf, int length)
     
         crc = (unsigned char)(data >> 8);
     }
+
+    return crc;
 }
 
 
