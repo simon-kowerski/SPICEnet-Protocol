@@ -1,17 +1,14 @@
 CC = gcc
-CFLAGS = -g -Wall -std=c99 -fsanitize=address,undefined -Iinclude
-CLINKS = -lm
+CFLAGS = -g -Wall -std=c99 -fsanitize=address,undefined -Iinclude 
+CLINKS = -lm -Llibrary/spicenet -lspicenet
 
-all: obctest
+all: testing
 
-obctest: obctest.o sndlp.o spp.o include/spicenet/*.h
-	$(CC) $(CFLAGS) $(CLINKS) -o $@ $^
-
-clienttest: clienttest.o sndlp.o spp.o include/spicenet/*.h
-	$(CC) $(CFLAGS) $(CLINKS) -o $@ $^
+testing: testing.c
+	$(CC) $(CFLAGS) $^ $(CLINKS) -o $@ 
 
 less: all
 	rm *.o
 
 clean: 
-	rm -rf *.o obctest
+	rm -rf *.o testing

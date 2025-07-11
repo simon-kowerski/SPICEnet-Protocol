@@ -10,6 +10,7 @@
 #include <spicenet/snp.h>
 #include <spicenet/sndlp.h>
 #include <spicenet/spp.h>
+#include <spicenet/sntp.h>
 
 #include <poll.h>
 
