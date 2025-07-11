@@ -21,7 +21,7 @@
 //TODO error checking and stuff
 
 int APID = 0x000;
-uint8_t SYNC[] = {0x0D, 0xEC, 0x0AF, 0x00};
+uint8_t SYNC[] = {0x1D, 0xEC, 0x0AF, 0x00};
 
 // Opens the serial port for reading and writing
 // returns 0 on success or -1 and updates errno on failure
@@ -95,7 +95,6 @@ int sndlp_connect(int fd)
             }
         }
     }
-
     if(((uint8_t *)buf.data)[sizeof(SYNC) - 1] == 0x00) sndlp_write(fd, APID, SYNC, sizeof(SYNC));
     free(buf.data);
     
@@ -179,6 +178,6 @@ int sndlp_read(int fd, sndlp_data_t *buf)
 
         total += bytes;
     }
-
+            
     return total;
 }

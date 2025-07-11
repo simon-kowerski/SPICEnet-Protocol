@@ -29,11 +29,11 @@
 // how you read to and write from the port
 int fd;
 pthread_t receive_tid;
-pthread_mutex_t *fd_mutex;
+pthread_mutex_t fd_mutex;  //TODO figure out if we need this i think we might not
 
 // for user programs to write to
 int write_fds[2];
-pthread_mutex_t *write_mutex;
+pthread_mutex_t write_mutex;
 
 // list of running apps
 sntp_app_t *running_apps;
@@ -74,8 +74,8 @@ int sntp_connect(int apid, sntp_app_t **app)
     (*app)->apid = apid;
     ret = sntp_app_insert(*app);
     if(ret) return ret;
-    pthread_mutex_init((*app)->mutex, NULL);
-    pthread_cond_init((*app)->read_ready, NULL);
+    pthread_mutex_init(&((*app)->mutex), NULL);
+    pthread_cond_init(&((*app)->read_ready), NULL);
     return 0;
 }
 
@@ -91,15 +91,15 @@ int sntp_close(sntp_app_t *app)
 // allows client apps to send data to SNTP
 int sntp_transmit(sntp_app_t *app, void *buf, int size)
 {
-    pthread_mutex_lock(fd_mutex);
+    pthread_mutex_lock(&write_mutex);
     int ret = sntp_write(write_fds[0], app->apid, buf, size);
-    pthread_mutex_unlock(fd_mutex);
+    pthread_mutex_unlock(&write_mutex);
     return ret;
 }
 
 // listens for incoming traffic on the connection
 // in its own thread 
-void sntp_receive_client(void *arg)
+void * sntp_receive_client(void *arg)
 {
     struct pollfd pollfds[1];
     pollfds[0].fd = fd;
@@ -128,10 +128,10 @@ void sntp_receive_client(void *arg)
         // send to appropriate apid
         // TODO maybe start another thread for the below
         app = sntp_app_find(received.apid);
-        pthread_mutex_lock(app->mutex);
+        pthread_mutex_lock(&(app->mutex));
         write(app->read[1], data, received.size - HEAD_SIZE - TAIL_SIZE);
-        pthread_cond_signal(app->read_ready);
-        pthread_mutex_unlock(app->mutex);
+        pthread_cond_signal(&(app->read_ready));
+        pthread_mutex_unlock(&(app->mutex));
     }
 }
 
@@ -145,16 +145,17 @@ int sntp_write(int fd, int apid, void *buf, int size)
     
     //TODO write value at the beginning
     memcpy(&write_buf[HEAD_SIZE], buf, size);
-    memcpy(&write_buf[HEAD_SIZE + size], crc, 1);
+    memcpy(&write_buf[HEAD_SIZE + size], &crc, 1);
 
     return sndlp_write(fd, apid, write_buf, write_size) - (HEAD_SIZE + TAIL_SIZE);
 }
 
 // initlizes global mutexes and starts threads
+// TODO int return
 void sntp_start(int fd)
 {
-    pthread_mutex_init(fd_mutex, NULL);
-    pthread_mutex_init(write_mutex, NULL);
+    pthread_mutex_init(&fd_mutex, NULL);
+    pthread_mutex_init(&write_mutex, NULL);
     pipe(write_fds);
     int error = pthread_create(&receive_tid, NULL, sntp_receive_client, NULL);
     if (error); //TODO error message maybe

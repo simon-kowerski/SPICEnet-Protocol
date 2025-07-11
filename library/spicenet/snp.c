@@ -1,3 +1,4 @@
+//TODO HEADER
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,9 +9,9 @@
 #include <signal.h>
 
 #include <spicenet/snp.h>
+#include <spicenet/sntp.h>
 #include <spicenet/sndlp.h>
 #include <spicenet/spp.h>
-#include <spicenet/sntp.h>
 
 #include <poll.h>
 
@@ -39,8 +40,10 @@ int snp_open(int *fd, char *portname)
 //TODO return value among others
 int snp_listen(int fd)
 {
-    sndlp_connect(fd);
+    int ret;
+    if((ret = sndlp_connect(fd))) return ret;
     spp_init();
+    //TODO if((ret = sntp_start(fd))) return ret;
     sntp_start(fd);
     return 0;
 }
@@ -60,10 +63,10 @@ int snp_write(snp_app_t *app, void *buf, int size)
 //
 int snp_read(snp_app_t *app, void *buf, int size)
 {
-    pthread_mutex_lock(app->mutex);
-    pthread_cond_wait(app->read_ready, app->mutex);
+    pthread_mutex_lock(&(app->mutex));
+    pthread_cond_wait(&(app->read_ready), &(app->mutex));
     int ret = read(app->read[0], buf, size);
-    pthread_mutex_unlock(app->mutex);
+    pthread_mutex_unlock(&(app->mutex));
     return ret;
 }
 

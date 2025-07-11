@@ -1,9 +1,9 @@
 typedef struct serial_recieve
 {
-    int type : 1;
-    int apid : 11;
-    int pkt_num : 14;
-    int size : 16;
+    unsigned int type : 1;
+    unsigned int apid : 11;
+    unsigned int pkt_num : 14;
+    unsigned int size : 16;
 
     void *data;
 } sndlp_data_t;

@@ -9,7 +9,7 @@ int main(int argv, char **argc)
 {
     printf("[Starting SPICEnet]\n");
     int fd;
-    char *portname = "/dev/ttyS0";
+    char *portname = "/dev/ttyUSB0";
 
     int ret = snp_open(&fd, portname);
     if(ret) 
@@ -20,7 +20,11 @@ int main(int argv, char **argc)
     
     printf("[Opened Serial Connection] %s\n", portname);
 
-    snp_listen(fd);
+    if((ret = snp_listen(fd)))
+    {
+        printf("[Serial Connection Invalid] %d\n", ret);
+        return EXIT_FAILURE;
+    }
 
     printf("[Serial Connection Confirmed]\n");
 
