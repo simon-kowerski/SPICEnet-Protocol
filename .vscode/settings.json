@@ -5,6 +5,7 @@
         "fcntl.h": "c",
         "stdlib.h": "c",
         "sndlp.h": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "stdint.h": "c"
     }
 }

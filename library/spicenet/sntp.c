@@ -108,6 +108,9 @@ void * sntp_receive_client(void *arg)
     sndlp_data_t received;
     sntp_app_t *app;
 
+    int last_packet[MAX_APID];
+
+
     while(1)
     {
         poll(pollfds, 1, -1);
@@ -119,11 +122,22 @@ void * sntp_receive_client(void *arg)
         void *data = &(received.data[HEAD_SIZE]);
         char crc = *((char *) &(received.data[HEAD_SIZE + size]));
 
-        // TODO check validity of packet
-            //todo
+        if(crc8(data, received.size - HEAD_SIZE - TAIL_SIZE) != crc) // packet invalid
+        {
+            continue; // skip this packet
+        }
+
+        if(last_packet[received.apid]+1 != received.pkt_num) // packet out of order
+        {
+            // TODO handle out of order packet
+        }
+
 
         // TODO request retransmission if necessary
-            //todo
+
+        // TODO increment last received packet number
+            //need an if statement here to ensure that the packets are truly in the correct order
+        last_packet[received.apid] = received.pkt_num;
 
         // send to appropriate apid
         // TODO maybe start another thread for the below
