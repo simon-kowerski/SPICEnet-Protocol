@@ -5,6 +5,7 @@
 #include <spicenet/config.h>
 #include <spicenet/snp.h>
 
+//TODO ensure that all of this stuff (and error cases for listen) are correct
 int main(int argv, char **argc)
 {
     printf("[Starting SPICEnet]\n");
