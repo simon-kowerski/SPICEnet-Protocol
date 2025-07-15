@@ -1,5 +1,9 @@
-//TODO HEADER
-
+// *******************
+//
+// SPICEnet Protocol (snp)
+// Session Layer API
+//
+// *******************
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
