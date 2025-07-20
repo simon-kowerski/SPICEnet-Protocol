@@ -47,7 +47,7 @@ void fop_start_timer();
 int fop_look_fdu();
 void fop_alert(fop_alert_t alert);
 
-void fop_purge_sent_queue() // DONE
+void fop_purge_sent_queue() // DONE WORKS
 {
     
     // generate signal maybe
@@ -62,7 +62,7 @@ void fop_purge_sent_queue() // DONE
     }
 }
 
-void fop_purge_wait_queue() //DONE
+void fop_purge_wait_queue() // DONE WORKS
 {
     free(wait_queue);
     wait_queue = NULL;
@@ -70,7 +70,7 @@ void fop_purge_wait_queue() //DONE
 
 // returns bytes written 
 // if pos == -1 it is a new frame to add to the sent queue
-int fop_transmit_ad_frame(sntp_app_t *app, void *buf, int size, int pos) //DONE
+int fop_transmit_ad_frame(sntp_app_t *app, void *buf, int size, int pos) // DONE WORKS
 {
     // if not a retransmit, add frame to the sent queue
     if(pos == -1) 
@@ -158,7 +158,7 @@ void fop_initiate_retransmission() // DONE
     }
 }
 
-void fop_remove_ack_frames(int NR) // DONE
+void fop_remove_ack_frames(int NR) // DONE 
 {
     int i, pos, wrap = 0;
     uint8_t ns;
@@ -191,7 +191,7 @@ void fop_look_directive()
 }
 
 // returns bytes written 
-int fop_look_fdu() // DONE
+int fop_look_fdu() // DONE WORKS
 {
     if(!ad_out_flag) return ECOP_NOT_READY;
 
@@ -231,7 +231,7 @@ void fop_confirm()
     
 }
 
-void fop_initalize() //DONE
+void fop_initalize() // DONE WORKS
 {
     fop_purge_sent_queue();
     fop_purge_wait_queue();
@@ -239,12 +239,12 @@ void fop_initalize() //DONE
     SS = 0;
 }
 
-void fop_suspend() //DONE
+void fop_suspend() // DONE
 {
     SS = 1;
 }
 
-void fop_resume() //DONE
+void fop_resume() // DONE
 {
     SS = 0;
     fop_start_timer();
@@ -260,7 +260,7 @@ void fop_cancel_timer()
     
 }
 
-void fop_alert(fop_alert_t alert) // MOSTLY DONE
+void fop_alert(fop_alert_t alert) // DONEALMOST
 {
     fop_cancel_timer();
     fop_purge_wait_queue();
@@ -601,7 +601,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
     }
 } // end valid CLCW
 
-int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE
+int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 {
     if(wait_queue) return ECOP_REJECT; // E20
     switch (fop_state) //E19
@@ -648,7 +648,7 @@ unsigned int farm_b_counter;        // f) FARM-B_Counter
 #define NW (W/2)                    // i) FARM_Negative_Window_Width (also known as ‘NW’)
 pthread_mutex_t farm_lock;
 
-void farm_start()
+void farm_start() // DONE WORKS
 {
     lockout_flag = 0;
     wait_flag = 0;
@@ -661,7 +661,7 @@ void farm_start()
 }
 
 // FARM-1 to receive a valid user data frame
-void* farm_receive(void *void_packet)
+void* farm_receive(void *void_packet) // DONE WORKS
 {  
     sndlp_data_t *packet = (sndlp_data_t *) void_packet;
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
