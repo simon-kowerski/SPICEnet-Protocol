@@ -55,6 +55,7 @@ int sntp_connect(int apid, sntp_app_t **app)
     
     //TODO proper startup of COP-1
     farm_start();
+    fop_start();
     return 0;
 }
 
@@ -95,21 +96,20 @@ void * sntp_receive_client(void *arg)
 
         //int header = * ((int *) received->data);
         void *data = &(((char *) (received->data))[HEAD_SIZE]);
-        char crc = *((char *) &(((char *) (received->data))[HEAD_SIZE + size]));
+        char crc = *((char *) &(((char *) (received->data))[HEAD_SIZE + size - TAIL_SIZE]));
 
-        if(crc8(data, received->size - HEAD_SIZE - TAIL_SIZE) != crc) // packet invalid
+        received->size -= HEAD_SIZE + TAIL_SIZE;
+        received->data = data;
+
+        if(crc8(data, received->size) != crc) // packet invalid
         {
             continue; // skip this packet
         }
 
-        received->data = data;
-        received->size -= HEAD_SIZE + TAIL_SIZE;
-
         // send packet to FARM-1 in new thread
         pthread_t thread;
         pthread_create(&thread, NULL, farm_receive, received);
-        // disconnect thread from the main
-        // move on
+        pthread_detach(thread);
     }
 }
 
@@ -139,15 +139,18 @@ int sntp_write(int apid, void *buf, int size)
     int bytes = sndlp_write(fd, apid, write_buf, write_size) - (HEAD_SIZE + TAIL_SIZE);
     pthread_mutex_unlock(&write_mutex);
 
+    free(write_buf);
+
     return bytes;
 }
 
 // initlizes global mutexes and starts threads
 // TODO int return
-void sntp_start(int fd)
+void sntp_start(int file_desc)
 {
     pthread_mutex_init(&fd_mutex, NULL);
     pthread_mutex_init(&write_mutex, NULL);
+    fd = file_desc;
     int error = pthread_create(&receive_tid, NULL, sntp_receive_client, NULL);
     if (error); //TODO error message maybe
     //install_handlers();

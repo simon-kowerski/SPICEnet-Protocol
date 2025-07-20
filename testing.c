@@ -5,12 +5,19 @@
 #include <spicenet/config.h>
 #include <spicenet/snp.h>
 
+#if DEV_ID == 0
+#define portname "/dev/ttyUSB0"
+#endif
+
+#ifndef portname
+#define portname "/dev/ttyS0"
+#endif
+
 //TODO ensure that all of this stuff (and error cases for listen) are correct
 int main(int argv, char **argc)
 {
     printf("[Starting SPICEnet]\n");
     int fd;
-    char *portname = "/dev/ttyUSB0";
 
     int ret = snp_open(&fd, portname);
     if(ret) 
@@ -23,7 +30,7 @@ int main(int argv, char **argc)
 
     if((ret = snp_listen(fd)))
     {
-        printf("[Serial Connection Invalid] %d\n", ret);
+        printf("[Serial Connection Invalid] %x\n", ret);
         return EXIT_FAILURE;
     }
 
@@ -34,4 +41,17 @@ int main(int argv, char **argc)
     snp_connect(apid, &conn);
 
     printf("[Connected to apid] %d\n", apid);
+
+
+    if(DEV_ID == 1) 
+    {
+       printf("[Wrote to port] %x\n", snp_write(conn, "Hello World!", 13));
+    }
+
+    else
+    {
+        char buf[13];
+        printf("[Received] %d\n", snp_read(conn, buf, 13));
+        printf("%s\n", buf);
+    }
 }

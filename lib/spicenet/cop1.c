@@ -75,27 +75,30 @@ int fop_transmit_ad_frame(sntp_app_t *app, void *buf, int size, int pos) //DONE
     // if not a retransmit, add frame to the sent queue
     if(pos == -1) 
     {
-        void *big_buf = malloc(size + sizeof(VS));
+        size += sizeof(VS);
+        void *big_buf = malloc(size);
 
         // insert V(S) to the N(S) section of the frame
         memcpy(big_buf, &VS, sizeof(VS));
-        memcpy(big_buf + 1, buf, size);
+        memcpy(big_buf + 1, buf, size - sizeof(VS));
         VS += 1;    
 
         pos = sq_start + sq_length;
         if(pos >= K) pos -= K;
     
-        sent_queue[pos] = malloc(sizeof(size + sizeof(VS)));
+        sent_queue[pos] = malloc(size);
         sent_app[pos] = malloc(sizeof(sntp_app_t));
     
 
-        memcpy(sent_queue[pos], big_buf, size + sizeof(VS));
+        memcpy(sent_queue[pos], big_buf, size);
         memcpy(sent_app[pos], app, sizeof(sntp_app_t));
         sq_sizes[pos] = size;
         free(big_buf);
 
         if(sq_length == 0) trans_count = 1;
         sq_length++;
+
+        fop_purge_wait_queue();
     }
 
     to_be_retransmitted_flag[pos] = 0;
@@ -104,7 +107,7 @@ int fop_transmit_ad_frame(sntp_app_t *app, void *buf, int size, int pos) //DONE
 
     // deliver the frame
     ad_out_flag = 0;
-    int bytes_written = sntp_write(app->apid, buf, size);
+    int bytes_written = sntp_write(app->apid, sent_queue[pos], size);
     ad_out_flag = 1;
 
     int ret2;
@@ -200,21 +203,20 @@ int fop_look_fdu() // DONE
         {
             if(wrap == 0 && i >= K) wrap = K;
             pos = sq_start + i - wrap;
-            return fop_transmit_ad_frame(sent_app[pos], sent_queue[pos], sq_sizes[pos], pos);
+            if(to_be_retransmitted_flag[pos]) return fop_transmit_ad_frame(sent_app[pos], sent_queue[pos], sq_sizes[pos], pos);
         }
     }
 
     if(wait_queue)
     {
         pos = fop_transmit_ad_frame(&wait_app, wait_queue, wait_size, -1);
-        fop_purge_wait_queue();
         return pos;
     }
 
     else return 0;
 }
 
-void fop_acceept()
+void fop_accept()
 {
 
 }
@@ -266,6 +268,16 @@ void fop_alert(fop_alert_t alert) // MOSTLY DONE
     //smth idk
     //send alert to SNTP somehow
     printf(" <<! %d !>>\n", alert);
+}
+
+void fop_start()
+{
+    //E23
+    fop_accept();
+    fop_initalize();
+    fop_confirm();
+    fop_state = ACTIVE;
+    ad_out_flag = 1;
 }
 
 void fop_receive_clcw(sndlp_data_t *packet) // DONE
@@ -591,7 +603,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
 
 int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE
 {
-    if(!wait_queue) return ECOP_REJECT; // E20
+    if(wait_queue) return ECOP_REJECT; // E20
     switch (fop_state) //E19
     {
         case ACTIVE:
@@ -600,7 +612,7 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE
             memcpy(wait_queue, buf, size);
             memcpy(&wait_app, app, sizeof(*app));
             wait_size = size;
-            return fop_look_fdu();
+            return fop_look_fdu() - sizeof(VS);
         case RE_W_WAIT:
             wait_queue = malloc(size);
             memcpy(wait_queue, buf, size);
@@ -621,7 +633,7 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE
 // TODO BC frames
 // TODO unlocking / see if wait is necessary (i dont think it is)
 
-#define farm_accept(X) { sntp_deliver((X)->apid, &(((char *) (X)->data)[sizeof(int)]), (X)->size - sizeof(int)); free((X)); }
+#define farm_accept(X) { sntp_deliver((X)->apid, (X)->data, (X)->size); free((X)); }
 #define farm_discard(X) free((X))
 
 typedef enum farm_states {OPEN, WAIT, LOCKOUT} farm_state_t;
@@ -643,6 +655,7 @@ void farm_start()
     retransmit_flag = 0;
     VR = 0; 
     farm_b_counter = 0;
+    farm_state = OPEN;
 
     pthread_mutex_init(&farm_lock, NULL);
 }
@@ -654,8 +667,8 @@ void* farm_receive(void *void_packet)
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
     uint8_t NS = *((uint8_t *) packet->data);
     packet->data = &((char *) packet->data)[sizeof(NS)];
-    packet->size -= sizeof(NS);
-
+    packet->size -= sizeof(char);
+    
     if(NS == VR) // E1 correct value of NS
     {
         if(farm_state == OPEN) // S0 accept the packet

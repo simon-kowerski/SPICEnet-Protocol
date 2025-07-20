@@ -2,6 +2,7 @@
 #include <spicenet/sntp_structures.h>
 
 
+void fop_start();
 int fop_request_transmit(sntp_app_t *app, void *buf, int size);
 void fop_receive_clcw(sndlp_data_t *packet);
 
