@@ -6,6 +6,13 @@
         "stdlib.h": "c",
         "sndlp.h": "c",
         "cstdlib": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "array": "c",
+        "bitset": "c",
+        "string_view": "c",
+        "format": "c",
+        "initializer_list": "c",
+        "span": "c",
+        "sntp.h": "c"
     }
 }

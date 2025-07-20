@@ -1,3 +1,5 @@
+#ifndef SERIAL_RECV
+#define SERIAL_RECV
 typedef struct serial_recieve
 {
     unsigned int type : 1;
@@ -7,6 +9,7 @@ typedef struct serial_recieve
 
     void *data;
 } sndlp_data_t;
+#endif
 
 int sndlp_open(int *fd, char *portname);
 int sndlp_read(int fd, sndlp_data_t *buf);

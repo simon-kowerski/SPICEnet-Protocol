@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -g -Wall -std=c99 -fsanitize=address,undefined -Iinclude 
-CLINKS = -lm -Llibrary/spicenet -lspicenet
+CLINKS = -lm -Llib/spicenet -lspicenet
 
 all: testing
 

@@ -150,7 +150,7 @@ void * sntp_receive_client(void *arg)
 }
 
 // forwards the SNTP packet to SNDLP
-int sntp_write(int fd, int apid, void *buf, int size)
+int sntp_write(int fd, int apid, void *buf, int size) // this fd isnt right
 {
     int write_size = size + HEAD_SIZE + TAIL_SIZE;
     char *write_buf = malloc(write_size);

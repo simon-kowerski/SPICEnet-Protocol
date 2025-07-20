@@ -17,6 +17,7 @@
 #include <spicenet/spp.h>
 #include <spicenet/sndlp.h>
 #include <spicenet/config.h>
+#include <spicenet/errors.h>
 
 //TODO error checking and stuff
 
@@ -33,7 +34,7 @@ int sndlp_open(int *fd, char *portname)
     *fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
     if (*fd == -1) {
         // perror("Error opening serial port");
-        return -1;
+        return ESNDLP_SERIAL;
     }
 
     // configure the serial port
@@ -41,7 +42,7 @@ int sndlp_open(int *fd, char *portname)
     {
         //perror("Error getting serial port attributes");
         close(*fd);
-        return -1;
+        return ESNDLP_SERIAL;
     }
 
     // set baud rate to 115200
@@ -64,7 +65,7 @@ int sndlp_open(int *fd, char *portname)
     {
         perror("Error setting serial port attributes");
         close(*fd);
-        return -1;
+        return ESNDLP_SERIAL;
     }
 
     return 0;
@@ -81,16 +82,16 @@ int sndlp_connect(int fd)
     sndlp_data_t buf;
     sndlp_read(fd, &buf);
     SYNC[sizeof(SYNC) - 1] = 0xff;
-    if(buf.apid != APID) ret = -1;
-    else if(buf.type == DEV_ID) ret = -2;
-    else if(buf.size != sizeof(SYNC)) ret = -3;
+    if(buf.apid != APID) ret = ECONN_APID;
+    else if(buf.type == DEV_ID) ret = ECONN_DEVID;
+    else if(buf.size != sizeof(SYNC)) ret = ECONN_SIZE;
     else 
     {
         for(int i = 0; i < sizeof(SYNC) - 1; i++)
         {
             if(((uint8_t *)buf.data)[i] != SYNC[i]) 
             {
-                ret = -4;
+                ret = ECONN_SYNC;
                 break;
             }
         }

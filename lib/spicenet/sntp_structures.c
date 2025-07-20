@@ -49,11 +49,11 @@ sntp_app_t * sntp_app_find(int apid)
     int hash = (apid % TABLE_SIZE);
 
     sntp_app_t *head = hash_table[hash];
-    sntp_app_t *prev = NULL;
+    //sntp_app_t *prev = NULL;
     
     while(head && head->apid != apid)
     {
-        prev = head;
+        //prev = head;
         head = head->next;
     }
 
