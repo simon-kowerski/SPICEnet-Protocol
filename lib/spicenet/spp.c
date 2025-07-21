@@ -4,6 +4,8 @@
 // Space Packet Protocol
 // CCSDS Standard
 //
+// Implemented by: Simon Kowerski
+//
 // *******************
 
 #include <stdio.h>
@@ -118,9 +120,8 @@ void spp_pack_serv(void *data, int length, unsigned int apid, spp_packet_t **pac
     {
         (*packets)[i].version = 0;
         (*packets)[i].type = DEV_ID;          
-        (*packets)[i].sec_header_flag = 0;  //TODO: see apid table
+        (*packets)[i].sec_header_flag = 0; 
         (*packets)[i].apid = apid;
-        //TODO test if/else
         if(i == 0) (*packets)[i].seq_flag = (num_packets == 1) ? 0b11 : 0b01;
         else (*packets)[i].seq_flag = (i + 1 == num_packets) ? 0b10 : 0b00;
         (*packets)[i].count_name = next_seq_count(apid);

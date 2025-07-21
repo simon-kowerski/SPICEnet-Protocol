@@ -1,3 +1,13 @@
+// *******************
+//
+// SPICEnet Transport Protocol
+// Communications Operation Procedure 1 (COP-1)
+// CCSDS Standard 232.1-B-2
+//
+// Implemented by: Simon Kowerski
+//
+// *******************
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -13,7 +23,7 @@
 
 // ************* BEGIN FOP-1 STATE MACHINE *************
 
-//TODO mutexes to prevent more than one thread from using each state machine at a time
+//TODO mutex to prevent more than one thread from using each state machine at a time
 
 typedef enum fop_states {place_holder, ACTIVE, RE_WO_WAIT, RE_W_WAIT, INIT_WO_BC, INIT_W_BC, INITIAL} fop_state_t;
 typedef enum fop_alerts {A_SYNC, A_CLCW, A_LOCKOUT, A_LIMIT, A_NNR, A_T1, A_TERM, A_LLIF} fop_alert_t;
@@ -265,7 +275,7 @@ void fop_resume() // DONE
 
 void * timer_run(void * none)
 {
-    // TODO lock in the timer
+    // TODO lock when timer ends
     while(T1 > 0)
     {
         T1--;
@@ -389,6 +399,8 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
         fop_state = INITIAL;
         return; 
     }
+
+    // TODO lock in here
 
     uint8_t nr = ((uint8_t *) packet->data)[1];
     int lockout = ((uint8_t *) packet->data)[0] >> 7;
@@ -704,6 +716,9 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
 int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 {
     if(wait_queue) return ECOP_REJECT; // E20
+
+    // TODO lock in here
+
     switch (fop_state) //E19
     {
         case ACTIVE:
@@ -729,7 +744,6 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 
 
 // ************* BEGIN FARM-1 STATE MACHINE *************
-// TODO timer for transmit CLCW
 // TODO BC frames
 // TODO unlocking / see if wait is necessary (i dont think it is)
 
@@ -775,8 +789,8 @@ void* farm_receive(void *void_packet) // DONE WORKS
 {  
     sndlp_data_t *packet = (sndlp_data_t *) void_packet;
     
-    if(packet->apid == APID) { fop_receive_clcw(packet); free(packet); return NULL;} // TODO deliver packet to FOP-1 
-    
+    if(packet->apid == APID) { fop_receive_clcw(packet); free(packet); return NULL; } // deliver clcw packets to FOP-1 
+
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
     uint8_t NS = *((uint8_t *) packet->data);
     packet->data = &((char *) packet->data)[sizeof(NS)];

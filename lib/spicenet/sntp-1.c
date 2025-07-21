@@ -1,6 +1,9 @@
 // *******************
 //
 // SPICEnet Transport Protocol
+// With COP-1 
+//
+// Written by: Simon Kowerski
 //
 // *******************
 
@@ -23,13 +26,12 @@
 #define HEAD_SIZE 0
 #define TAIL_SIZE 1
 
-//TODO don't forget to wait for child processes
 //TODO have a way to get rid of inactive apps, maybe see if the fd has closed
+//TODO COP-1 Alert and Suspend Handler - automatically close the connections when it detects the timeout alert from COP-1
 
 // how you read to and write from the port
 int fd;
 pthread_t receive_tid;
-pthread_mutex_t fd_mutex;  //TODO figure out if we need this i think we might not
 
 // for user programs to write to
 pthread_mutex_t write_mutex;
@@ -52,8 +54,6 @@ int sntp_connect(int apid, sntp_app_t **app)
     if(ret) return ret;
     pthread_mutex_init(&((*app)->mutex), NULL);
     pthread_cond_init(&((*app)->read_ready), NULL);
-    
-    //TODO proper startup of COP-1
     cop_1_start(fd);
     return 0;
 }
@@ -70,8 +70,7 @@ int sntp_close(sntp_app_t *app)
 // allows client apps to send data to SNTP
 int sntp_transmit(sntp_app_t *app, void *buf, int size)
 {
-    return fop_request_transmit(app, buf, size); //TODO request to transmit frame (add to wait queue)
-    //fop_transmit_ad_frame(app, buf, size);
+    return fop_request_transmit(app, buf, size); 
 }
 
 // listens for incoming traffic on the connection
@@ -144,15 +143,13 @@ int sntp_write(int apid, void *buf, int size)
 }
 
 // initlizes global mutexes and starts threads
-// TODO int return
-void sntp_start(int file_desc)
+int sntp_start(int file_desc)
 {
-    pthread_mutex_init(&fd_mutex, NULL);
     pthread_mutex_init(&write_mutex, NULL);
     fd = file_desc;
     int error = pthread_create(&receive_tid, NULL, sntp_receive_client, NULL);
-    if (error); //TODO error message maybe
-    //install_handlers();
+    if (error) return error;
+    return 0;
 }
 
 #define POLYNOMIAL (0x1070U << 3)

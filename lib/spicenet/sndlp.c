@@ -1,7 +1,9 @@
 // *******************
 //
 // SPICEnet Data Link Protocol
-// Driver for serial over RS422
+// With driver for serial over RS422
+//
+// Written by: Simon Kowerski
 //
 // *******************
 
@@ -74,7 +76,6 @@ int sndlp_open(int *fd, char *portname)
 // verfies a connection to the other device
 // returns 0 on success or an error code on failure
 
-// TODO ensure config settings match
 int sndlp_connect(int fd)
 {
     int ret = 0;

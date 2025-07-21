@@ -1,3 +1,5 @@
+# Used to compile the spicenet library
+
 CC = gcc
 CFLAGS = -g -Wall -std=c99 -fsanitize=address,undefined -I../../include
 CLINKS = -lm

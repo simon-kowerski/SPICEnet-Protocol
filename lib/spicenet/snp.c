@@ -3,6 +3,8 @@
 // SPICEnet Protocol (snp)
 // Session Layer API
 //
+// Written by: Simon Kowerski
+//
 // *******************
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,6 +20,8 @@
 #include <spicenet/spp.h>
 
 #include <poll.h>
+
+// TODO perror
 
 // called by main to start service, universal stuff
     // snp_open - call sndlp_open to get the fd
@@ -41,13 +45,12 @@ int snp_open(int *fd, char *portname)
     // will initalize spp and sntp
     // any data coming in with no matching apid will get ignored 
     // once returned, you know that the port is open an someone is listening
-//TODO return value among others
 int snp_listen(int fd)
 {
     int ret;
     if((ret = sndlp_connect(fd))) return ret;
     spp_init();
-    //TODO if((ret = sntp_start(fd))) return ret;
+    if((ret = sntp_start(fd))) return ret;
     sntp_start(fd);
     return 0;
 }
@@ -74,7 +77,7 @@ int snp_read(snp_app_t *app, void *buf, int size)
     return ret;
 }
 
-// TODO diff return value if timeout
+//TODO better poll
 int snp_poll(snp_app_t *fds, int num_fds, int timeout)
 {
     struct pollfd *pollfds = malloc(num_fds * sizeof(struct pollfd));
