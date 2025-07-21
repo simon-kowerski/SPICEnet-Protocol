@@ -21,8 +21,6 @@
 #include <spicenet/config.h>
 #include <spicenet/errors.h>
 
-//TODO error checking and stuff
-
 int APID = 0x000;
 uint8_t SYNC[] = {0x1D, 0xEC, 0x0AF, 0x00};
 

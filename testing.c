@@ -13,7 +13,6 @@
 #define portname "/dev/ttyS0"
 #endif
 
-//TODO ensure that all of this stuff (and error cases for listen) are correct
 int main(int argv, char **argc)
 {
     printf("[Starting SPICEnet]\n");
