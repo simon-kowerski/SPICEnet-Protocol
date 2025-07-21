@@ -45,7 +45,7 @@ int main(int argv, char **argc)
 
     if(DEV_ID == 1) 
     {
-       printf("[Wrote to port] %x\n", snp_write(conn, "Hello World!", 13));
+       printf("[Wrote to port] %d\n", snp_write(conn, "Hello World!", 13));
     }
 
     else

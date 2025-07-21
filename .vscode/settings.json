@@ -13,6 +13,7 @@
         "format": "c",
         "initializer_list": "c",
         "span": "c",
-        "sntp.h": "c"
+        "sntp.h": "c",
+        "sntp_structures.h": "c"
     }
 }

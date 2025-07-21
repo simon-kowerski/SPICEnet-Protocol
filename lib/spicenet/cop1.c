@@ -1,8 +1,9 @@
-//TODO mutexes to prevent more than one thread from using each state machine at a time
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <signal.h>
 #include <spicenet/sndlp.h>
 #include <spicenet/sntp.h>
 #include <stdio.h>
@@ -12,8 +13,7 @@
 
 // ************* BEGIN FOP-1 STATE MACHINE *************
 
-//TODOS and Questions
-// what is an accept response
+//TODO mutexes to prevent more than one thread from using each state machine at a time
 
 typedef enum fop_states {place_holder, ACTIVE, RE_WO_WAIT, RE_W_WAIT, INIT_WO_BC, INIT_W_BC, INITIAL} fop_state_t;
 typedef enum fop_alerts {A_SYNC, A_CLCW, A_LOCKOUT, A_LIMIT, A_NNR, A_T1, A_TERM, A_LLIF} fop_alert_t;
@@ -41,11 +41,14 @@ unsigned int trans_limit;                   // k) Transmission Limit
 unsigned int trans_count;                   // l) Transmission Count
 unsigned int TT;                            // n) Timeout Type
 unsigned int SS;                            // o) Suspend State
+
 unsigned int T1;                            // Timer
+int T1_active;
+pthread_t timer_thread;
 
 void fop_start_timer();
 int fop_look_fdu();
-void fop_alert(fop_alert_t alert);
+void fop_alert(fop_alert_t alert, int event);
 
 void fop_purge_sent_queue() // DONE WORKS
 {
@@ -127,7 +130,7 @@ int fop_transmit_ad_frame(sntp_app_t *app, void *buf, int size, int pos) // DONE
 
     else // E42 AD_Reject
     {
-        fop_alert(A_LLIF);
+        fop_alert(A_LLIF, 42);
         fop_state = INITIAL;
     }
 
@@ -236,12 +239,22 @@ void fop_initalize() // DONE WORKS
     fop_purge_sent_queue();
     fop_purge_wait_queue();
     trans_count = 1;
+    trans_limit = 10;
     SS = 0;
+    T1 = 0;
+    T1_initial = 4;
+    TT = 0;
+    ad_out_flag = 1;
+    bc_out_flag = 1;
+    bd_out_flag = 1;
+    fop_state = INITIAL;
+    VS = 0;
+    NNR = 0; // TODO check nnr
 }
 
-void fop_suspend() // DONE
+void fop_suspend() 
 {
-    SS = 1;
+    // notify SNTP that this is suspended
 }
 
 void fop_resume() // DONE
@@ -250,24 +263,111 @@ void fop_resume() // DONE
     fop_start_timer();
 }
 
+void * timer_run(void * none)
+{
+    // TODO lock in the timer
+    while(T1 > 0)
+    {
+        T1--;
+        sleep(1);
+    }
+
+    T1_active = 0;
+
+    if(trans_count < trans_limit)
+    {
+        if(TT == 0) // E16
+        {
+            switch(fop_state)
+            {
+                case ACTIVE:
+                case RE_WO_WAIT:
+                    fop_initiate_retransmission();
+                    fop_look_fdu();
+                    break;
+                case INIT_WO_BC:
+                    fop_alert(A_T1, 16);
+                    fop_state = INITIAL;
+                    break;
+                case INIT_W_BC:
+                    // TODO initiate bc retrans
+                    fop_look_directive();
+                default:
+                    break;
+            }
+        }
+
+        else // E104
+        {
+            switch(fop_state)
+            {
+                case ACTIVE:
+                case RE_WO_WAIT:
+                    fop_initiate_retransmission();
+                    fop_look_fdu();
+                    break;
+                case INIT_WO_BC:
+                    SS=4;
+                    fop_suspend();
+                    fop_state = INITIAL;
+                    break;
+                case INIT_W_BC:
+                    // TODO initiate bc retrans
+                    fop_look_directive();
+                default:
+                    break;
+            }
+        }
+    }
+
+    else
+    {
+        if(TT == 0) // E17
+        {
+            fop_alert(A_T1, 17);
+            fop_state = INITIAL;
+        }
+        
+        else // E18
+        {
+            if(fop_state == INIT_W_BC) fop_alert(A_T1, 18);
+            else 
+            {
+                SS = fop_state;
+                fop_suspend();
+            }
+            fop_state = INITIAL;
+        }
+    }
+
+    return NULL;
+}
+
 void fop_start_timer()
 {
-
+    T1 = T1_initial;
+    if(!T1_active)
+    {
+        T1_active = 1;
+        pthread_create(&timer_thread, NULL, timer_run, NULL);
+        //pthread_detach(timer_thread);
+    }
 }
 
 void fop_cancel_timer()
 {
-    
+    pthread_cancel(timer_thread);
+    T1_active = 0;
 }
 
-void fop_alert(fop_alert_t alert) // DONEALMOST
+void fop_alert(fop_alert_t alert, int event) // DONEALMOST
 {
+    printf(" <<! ALERT %d - EVENT %d!>>\n", alert, event);
     fop_cancel_timer();
     fop_purge_wait_queue();
     fop_purge_sent_queue();
     //smth idk
     //send alert to SNTP somehow
-    printf(" <<! %d !>>\n", alert);
 }
 
 void fop_start()
@@ -285,7 +385,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
     if(packet->size != 2) // E15 Invalid CLCW
     { // TODO also make sure that there are zeros where there are supposed to be
         if(fop_state == INITIAL) return;    
-        fop_alert(A_CLCW);
+        fop_alert(A_CLCW, 15);
         fop_state = INITIAL;
         return; 
     }
@@ -310,7 +410,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                         {
                             case RE_WO_WAIT:
                             case RE_W_WAIT:
-                                fop_alert(A_SYNC);
+                                fop_alert(A_SYNC, 1);
                                 fop_state = INITIAL;
                                 break;
                             case INIT_WO_BC:
@@ -351,7 +451,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                 else //E3 CLCW error, wait shouldn't be active if no retransmit
                 {
                     // no lockout, nr == VS, no retransmit, wait
-                    if(fop_state != INITIAL) fop_alert(A_CLCW);
+                    if(fop_state != INITIAL) fop_alert(A_CLCW, 3);
                     fop_state = INITIAL;
                 }
             } // no retransmit
@@ -365,7 +465,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                     case INIT_W_BC:
                         break;
                     default:
-                        fop_alert(A_SYNC);
+                        fop_alert(A_SYNC, 4);
                         fop_state = INITIAL;
                 }   
             }
@@ -384,7 +484,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                         {
                             case RE_WO_WAIT:
                             case RE_W_WAIT:
-                                fop_alert(A_SYNC);
+                                fop_alert(A_SYNC, 5);
                                 fop_state = INITIAL;
                                 break;
                             default:
@@ -418,7 +518,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                         case ACTIVE:
                         case RE_WO_WAIT:
                         case RE_W_WAIT:
-                            fop_alert(A_CLCW);
+                            fop_alert(A_CLCW, 7);
                             fop_state = INITIAL;
                             break;
                         default:
@@ -439,7 +539,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                             case ACTIVE:
                             case RE_WO_WAIT:
                             case RE_W_WAIT:
-                                fop_alert(A_LIMIT);
+                                fop_alert(A_LIMIT, 102);
                                 fop_state = INITIAL;
                                 break;
                             default:
@@ -456,7 +556,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                             case RE_WO_WAIT:
                             case RE_W_WAIT:
                                 fop_remove_ack_frames(nr);
-                                fop_alert(A_LIMIT);
+                                fop_alert(A_LIMIT, 101);
                                 fop_state = INITIAL;
                                 break;
                             default:
@@ -580,7 +680,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                 case INITIAL:
                     break;
                 default:
-                    fop_alert(A_NNR);
+                    fop_alert(A_NNR, 13);
                     fop_state = INITIAL;
             }   
         } // end invalid N(R)
@@ -595,7 +695,7 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
             case INITIAL:
                 break;
             default:
-                fop_alert(A_LOCKOUT);
+                fop_alert(A_LOCKOUT, 14);
                 fop_state = INITIAL;
         }    
     }
@@ -646,9 +746,12 @@ unsigned int farm_b_counter;        // f) FARM-B_Counter
 #define W 128                       // g) FARM_Sliding_Window_Width (also known as ‘W’)
 #define PW (W/2)                    // h) FARM_Positive_Window_Width (also known as ‘PW’)
 #define NW (W/2)                    // i) FARM_Negative_Window_Width (also known as ‘NW’)
-pthread_mutex_t farm_lock;
 
-void farm_start() // DONE WORKS
+int farm_timer;
+pthread_mutex_t farm_lock;
+void* clcw_service(void *app_t);
+
+void farm_start(int fd) // DONE WORKS
 {
     lockout_flag = 0;
     wait_flag = 0;
@@ -657,6 +760,13 @@ void farm_start() // DONE WORKS
     farm_b_counter = 0;
     farm_state = OPEN;
 
+    farm_timer = .1;
+
+    pthread_t thread;
+    sntp_app_t *app;
+    sntp_connect(APID, &app);
+    pthread_create(&thread, NULL, clcw_service, app);
+
     pthread_mutex_init(&farm_lock, NULL);
 }
 
@@ -664,11 +774,15 @@ void farm_start() // DONE WORKS
 void* farm_receive(void *void_packet) // DONE WORKS
 {  
     sndlp_data_t *packet = (sndlp_data_t *) void_packet;
+    
+    if(packet->apid == APID) { fop_receive_clcw(packet); free(packet); return NULL;} // TODO deliver packet to FOP-1 
+    
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
     uint8_t NS = *((uint8_t *) packet->data);
     packet->data = &((char *) packet->data)[sizeof(NS)];
     packet->size -= sizeof(char);
-    
+
+
     if(NS == VR) // E1 correct value of NS
     {
         if(farm_state == OPEN) // S0 accept the packet
@@ -676,8 +790,7 @@ void* farm_receive(void *void_packet) // DONE WORKS
             VR += 1;
             retransmit_flag = 0;
             pthread_mutex_unlock(&farm_lock);
-            if(packet->apid == APID) fop_receive_clcw(packet); // TODO deliver packet to FOP-1 
-            else farm_accept(packet);
+            farm_accept(packet);
             return NULL;
         }
 
@@ -715,4 +828,32 @@ void* farm_receive(void *void_packet) // DONE WORKS
     return NULL;
 }
 
+void* clcw_service(void *app_t)
+{
+
+    sntp_app_t *app = (sntp_app_t *) app_t; 
+
+    uint16_t packet;
+    while(1)
+    {
+        packet = 0;
+        packet += lockout_flag;
+        packet << 1;
+        packet += wait_flag;
+        packet << 1;
+        packet += retransmit_flag;
+        packet << 5;
+        packet += VR;
+        sntp_write(app->apid, &packet, 2);
+        sleep(farm_timer);
+    }
+}
+
 // ************* END FARM-1 STATE MACHINE *************
+
+
+void cop_1_start(int fd)
+{
+    fop_start();
+    farm_start(fd);
+}

@@ -54,8 +54,7 @@ int sntp_connect(int apid, sntp_app_t **app)
     pthread_cond_init(&((*app)->read_ready), NULL);
     
     //TODO proper startup of COP-1
-    farm_start();
-    fop_start();
+    cop_1_start(fd);
     return 0;
 }
 
