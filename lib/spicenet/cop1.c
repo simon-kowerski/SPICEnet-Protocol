@@ -24,6 +24,7 @@
 // ************* BEGIN FOP-1 STATE MACHINE *************
 
 //TODO mutex to prevent more than one thread from using each state machine at a time
+//TODO handle farm errors (ex. unlocking)
 
 typedef enum fop_states {place_holder, ACTIVE, RE_WO_WAIT, RE_W_WAIT, INIT_WO_BC, INIT_W_BC, INITIAL} fop_state_t;
 typedef enum fop_alerts {A_SYNC, A_CLCW, A_LOCKOUT, A_LIMIT, A_NNR, A_T1, A_TERM, A_LLIF} fop_alert_t;
@@ -712,6 +713,9 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
         }    
     }
 } // end valid CLCW
+
+
+// FOP-1 DIRECTIVES
 
 int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 {
