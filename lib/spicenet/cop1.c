@@ -19,12 +19,10 @@
 #include <stdio.h>
 
 #include <spicenet/errors.h>
-#define APID 0x001
+#define CLCW_APID 0x001
+#define BC_APID 0x002
 
 // ************* BEGIN FOP-1 STATE MACHINE *************
-
-//TODO mutex to prevent more than one thread from using each state machine at a time
-//TODO handle farm errors (ex. unlocking)
 
 typedef enum fop_states {place_holder, ACTIVE, RE_WO_WAIT, RE_W_WAIT, INIT_WO_BC, INIT_W_BC, INITIAL} fop_state_t;
 typedef enum fop_alerts {A_SYNC, A_CLCW, A_LOCKOUT, A_LIMIT, A_NNR, A_T1, A_TERM, A_LLIF} fop_alert_t;
@@ -56,6 +54,10 @@ unsigned int SS;                            // o) Suspend State
 unsigned int T1;                            // Timer
 int T1_active;
 pthread_t timer_thread;
+
+sntp_app_t *fop_app;
+pthread_mutex_t fop_lock;
+int init;
 
 void fop_start_timer();
 int fop_look_fdu();
@@ -276,13 +278,13 @@ void fop_resume() // DONE
 
 void * timer_run(void * none)
 {
-    // TODO lock when timer ends
     while(T1 > 0)
     {
         T1--;
         sleep(1);
     }
 
+    pthread_mutex_lock(&fop_lock);
     T1_active = 0;
 
     if(trans_count < trans_limit)
@@ -350,7 +352,7 @@ void * timer_run(void * none)
             fop_state = INITIAL;
         }
     }
-
+    pthread_mutex_unlock(&fop_lock);
     return NULL;
 }
 
@@ -361,7 +363,7 @@ void fop_start_timer()
     {
         T1_active = 1;
         pthread_create(&timer_thread, NULL, timer_run, NULL);
-        //pthread_detach(timer_thread);
+        pthread_detach(timer_thread);
     }
 }
 
@@ -377,6 +379,12 @@ void fop_alert(fop_alert_t alert, int event) // DONEALMOST
     fop_cancel_timer();
     fop_purge_wait_queue();
     fop_purge_sent_queue();
+
+    uint8_t lockvar;
+    if(alert == A_LIMIT || alert == A_T1); //TODO procedure to close the connection due to timeout
+    else if(alert == A_LOCKOUT) { lockvar = 0x01; sntp_write(fop_app->apid, &lockvar, 1); }
+    else{} // TODO do smth when CLCW error occurs (should never happen but just in case)
+    fop_start();
     //smth idk
     //send alert to SNTP somehow
 }
@@ -389,24 +397,31 @@ void fop_start()
     fop_confirm();
     fop_state = ACTIVE;
     ad_out_flag = 1;
+    if(!init) 
+    {
+        sntp_connect(CLCW_APID, &fop_app);
+        pthread_mutex_init(&fop_lock, NULL);
+        init = 1;
+    }
 }
 
 void fop_receive_clcw(sndlp_data_t *packet) // DONE
 {
-    if(packet->size != 2) // E15 Invalid CLCW
-    { // TODO also make sure that there are zeros where there are supposed to be
+    if(packet->size != 2 && ( *((uint8_t *) packet->data) & 0b00011111) != 0) // E15 Invalid CLCW
+    { 
         if(fop_state == INITIAL) return;    
         fop_alert(A_CLCW, 15);
         fop_state = INITIAL;
         return; 
     }
 
-    // TODO lock in here
 
     uint8_t nr = ((uint8_t *) packet->data)[1];
     int lockout = ((uint8_t *) packet->data)[0] >> 7;
     int wait = (((uint8_t *) packet->data)[0] << 1) >> 7;
     int retransmit = (((uint8_t *) packet->data)[0] << 2) >> 7;
+
+    pthread_mutex_lock(&fop_lock);
 
     if(!lockout)
     {
@@ -712,7 +727,11 @@ void fop_receive_clcw(sndlp_data_t *packet) // DONE
                 fop_state = INITIAL;
         }    
     }
+
+    pthread_mutex_unlock(&fop_lock);
+
 } // end valid CLCW
+
 
 
 // FOP-1 DIRECTIVES
@@ -721,7 +740,7 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 {
     if(wait_queue) return ECOP_REJECT; // E20
 
-    // TODO lock in here
+    pthread_mutex_lock(&fop_lock);
 
     switch (fop_state) //E19
     {
@@ -741,6 +760,8 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
         default:
             return ECOP_REJECT;
     }
+    
+    pthread_mutex_unlock(&fop_lock);
 }
 
 // ************* END FOP-1 STATE MACHINE *************
@@ -748,9 +769,6 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 
 
 // ************* BEGIN FARM-1 STATE MACHINE *************
-// TODO BC frames
-// TODO unlocking / see if wait is necessary (i dont think it is)
-
 #define farm_accept(X) { sntp_deliver((X)->apid, (X)->data, (X)->size); free((X)); }
 #define farm_discard(X) free((X))
 
@@ -782,10 +800,38 @@ void farm_start(int fd) // DONE WORKS
 
     pthread_t thread;
     sntp_app_t *app;
-    sntp_connect(APID, &app);
+    sntp_connect(CLCW_APID, &app);
     pthread_create(&thread, NULL, clcw_service, app);
-
+    pthread_detach(thread);
     pthread_mutex_init(&farm_lock, NULL);
+}
+
+void farm_unlock()
+{
+    switch(farm_state) // E7 valid unlock frame received
+    {
+        case LOCKOUT:
+            lockout_flag = 0;
+        case WAIT:
+            wait_flag = 0;
+        case OPEN:
+            farm_b_counter++;
+            retransmit_flag = 0;
+    }
+}
+
+void farm_set_vr(uint8_t new_vr)
+{
+    switch(farm_state) // E8 valid ser V(R) to V*(R) frame received
+    {
+        case WAIT:
+            wait_flag = 0;
+        case OPEN:
+            retransmit_flag = 0;
+            VR = new_vr;
+        case LOCKOUT:
+            farm_b_counter++;
+    }
 }
 
 // FARM-1 to receive a valid user data frame
@@ -793,7 +839,15 @@ void* farm_receive(void *void_packet) // DONE WORKS
 {  
     sndlp_data_t *packet = (sndlp_data_t *) void_packet;
     
-    if(packet->apid == APID) { fop_receive_clcw(packet); free(packet); return NULL; } // deliver clcw packets to FOP-1 
+    if(packet->apid == CLCW_APID) { fop_receive_clcw(packet); free(packet); return NULL; } // deliver clcw packets to FOP-1 
+    if(packet->apid == BC_APID) // valid BC frame arrived
+    {
+        pthread_mutex_lock(&farm_lock);
+        if(((uint8_t *)packet->data)[0] == 0x00) farm_unlock();
+        else if(((uint8_t *)packet->data)[0] == 0x01) farm_set_vr(((uint8_t *)packet->data)[1]);
+        pthread_mutex_unlock(&farm_lock);
+        return NULL;
+    } 
 
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
     uint8_t NS = *((uint8_t *) packet->data);
@@ -852,7 +906,7 @@ void* clcw_service(void *app_t)
     sntp_app_t *app = (sntp_app_t *) app_t; 
 
     uint16_t packet;
-    while(1)
+    while(1) // E11
     {
         packet = 0;
         packet += lockout_flag;
@@ -868,7 +922,6 @@ void* clcw_service(void *app_t)
 }
 
 // ************* END FARM-1 STATE MACHINE *************
-
 
 void cop_1_start(int fd)
 {
