@@ -22,6 +22,7 @@
 #include <poll.h>
 
 // TODO perror
+// TODO sndlp_read memory leaks
 
 // called by main to start service, universal stuff
     // snp_open - call sndlp_open to get the fd

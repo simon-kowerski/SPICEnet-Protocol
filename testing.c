@@ -41,7 +41,6 @@ int main(int argv, char **argc)
 
     printf("[Connected to apid] %d\n", apid);
 
-
     if(DEV_ID == 1) 
     {
        printf("[Wrote to port] %d\n", snp_write(conn, "Hello World!", 13));
