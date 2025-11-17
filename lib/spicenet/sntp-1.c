@@ -55,6 +55,7 @@ int sntp_connect(int apid, sntp_app_t **app)
     if(ret) return ret;
     pthread_mutex_init(&((*app)->mutex), NULL);
     pthread_cond_init(&((*app)->read_ready), NULL);
+    (*app)->unread = 0;
     cop_1_start(fd);
     return 0;
 }
@@ -124,7 +125,8 @@ void sntp_deliver(int apid, void *data, int size)
 {
     sntp_app_t *app = sntp_app_find(apid);
     pthread_mutex_lock(&(app->mutex));
-    write(app->read[1], data, size);
+    int written = write(app->read[1], data, size);
+    if (written > 0) app->unread += written;
     pthread_cond_signal(&(app->read_ready));
     pthread_mutex_unlock(&(app->mutex));
 }

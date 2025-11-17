@@ -5,6 +5,7 @@ typedef struct app_tree
 {
     int read[2];
     int apid;
+    int unread; /* number of unread bytes pending in the pipe */
     pthread_mutex_t mutex;
     pthread_cond_t read_ready;
     struct app_tree *next;

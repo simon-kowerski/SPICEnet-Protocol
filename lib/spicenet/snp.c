@@ -71,8 +71,15 @@ int snp_write(snp_app_t *app, void *buf, int size)
 int snp_read(snp_app_t *app, void *buf, int size)
 {
     pthread_mutex_lock(&(app->mutex));
-    pthread_cond_wait(&(app->read_ready), &(app->mutex));
+    /* Wait until there are unread bytes available. Use a while-loop to
+       handle spurious wakeups and ensure we don't miss a signal that
+       happened before we started waiting (we track bytes in app->unread). */
+    while(app->unread == 0) 
+    {
+        pthread_cond_wait(&(app->read_ready), &(app->mutex));
+    }
     int ret = read(app->read[0], buf, size);
+    if(ret > 0) app->unread -= ret;
     pthread_mutex_unlock(&(app->mutex));
     return ret;
 }
