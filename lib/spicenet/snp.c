@@ -52,7 +52,6 @@ int snp_listen(int fd)
     if((ret = sndlp_connect(fd))) return ret;
     spp_init();
     if((ret = sntp_start(fd))) return ret;
-    sntp_start(fd);
     return 0;
 }
 

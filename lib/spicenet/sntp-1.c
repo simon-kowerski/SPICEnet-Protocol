@@ -17,6 +17,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <stdint.h>
 
 #include <spicenet/sntp.h>
 #include <spicenet/sndlp.h>
@@ -94,6 +95,7 @@ void * sntp_receive_client(void *arg)
 
         //int header = * ((int *) received->data);
         void *data = &(((char *) (received->data))[HEAD_SIZE]);
+
         char crc = *((char *) &(((char *) (received->data))[HEAD_SIZE + size - TAIL_SIZE]));
 
         received->size -= HEAD_SIZE + TAIL_SIZE;
@@ -106,7 +108,9 @@ void * sntp_receive_client(void *arg)
 
         // send packet to FARM-1 in new thread
         pthread_t thread;
-        pthread_create(&thread, NULL, farm_receive, received);
+        sndlp_data_t *received2 = malloc(sizeof(sndlp_data_t));
+        memcpy(received2, received, sizeof(sndlp_data_t));
+        pthread_create(&thread, NULL, farm_receive, received2);
         pthread_detach(thread);
     }
 }
