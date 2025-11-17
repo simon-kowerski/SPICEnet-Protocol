@@ -103,13 +103,17 @@ void * sntp_receive_client(void *arg)
 
         if(crc8(data, received->size) != crc) // packet invalid
         {
+            free(received->data);
+            free(received);
             continue; // skip this packet
         }
 
         // send packet to FARM-1 in new thread
-        pthread_t thread;
         sndlp_data_t *received2 = malloc(sizeof(sndlp_data_t));
         memcpy(received2, received, sizeof(sndlp_data_t));
+        free(received);
+        
+        pthread_t thread;
         pthread_create(&thread, NULL, farm_receive, received2);
         pthread_detach(thread);
     }

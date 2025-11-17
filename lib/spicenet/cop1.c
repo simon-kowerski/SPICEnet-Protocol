@@ -769,8 +769,8 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
 
 
 // ************* BEGIN FARM-1 STATE MACHINE *************
-#define farm_accept(X) { sntp_deliver((X)->apid, (X)->data, (X)->size); free((X)); }
-#define farm_discard(X) free((X))
+#define farm_accept(X, Y) { sntp_deliver((X)->apid, (X)->data, (X)->size); free((Y)); free((X)); }
+#define farm_discard(X, Y) { free((Y)); free((X)); }
 
 typedef enum farm_states {OPEN, WAIT, LOCKOUT} farm_state_t;
 farm_state_t farm_state;            // a) State
@@ -850,6 +850,7 @@ void* farm_receive(void *void_packet) // DONE WORKS
     } 
 
     pthread_mutex_lock(&farm_lock); // make sure to unlock mutex before sending the packet to SNTP or FOP 
+    char *ptr = packet->data;
     uint8_t NS = *((uint8_t *) packet->data);
     packet->data = &((char *) packet->data)[sizeof(NS)];
     packet->size -= sizeof(char);
@@ -862,11 +863,11 @@ void* farm_receive(void *void_packet) // DONE WORKS
             VR += 1;
             retransmit_flag = 0;
             pthread_mutex_unlock(&farm_lock);
-            farm_accept(packet);
+            farm_accept(packet, ptr);
             return NULL;
         }
 
-        else farm_discard(packet); 
+        else farm_discard(packet, ptr); 
     }
 
     else if(NS > VR) // E3/E5 towards positive floating window
@@ -882,7 +883,7 @@ void* farm_receive(void *void_packet) // DONE WORKS
             farm_state = LOCKOUT;
         }
         
-        farm_discard(packet); // all states discard for both E3 and E5
+        farm_discard(packet, ptr); // all states discard for both E3 and E5
     }
 
     else if(NS < VR) // E4/E5 towards negative floating window
@@ -893,7 +894,7 @@ void* farm_receive(void *void_packet) // DONE WORKS
             farm_state = LOCKOUT;
         }
         
-        farm_discard(packet); // all states discard for both E4 and E5
+        farm_discard(packet, ptr); // all states discard for both E4 and E5
     }
 
     pthread_mutex_unlock(&farm_lock);
