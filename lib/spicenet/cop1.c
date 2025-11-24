@@ -750,14 +750,17 @@ int fop_request_transmit(sntp_app_t *app, void *buf, int size) // DONE WORKS
             memcpy(wait_queue, buf, size);
             memcpy(&wait_app, app, sizeof(*app));
             wait_size = size;
+            pthread_mutex_unlock(&fop_lock);
             return fop_look_fdu() - sizeof(VS);
         case RE_W_WAIT:
             wait_queue = malloc(size);
             memcpy(wait_queue, buf, size);
             memcpy(&wait_app, app, sizeof(*app));
             wait_size = size;
+            pthread_mutex_unlock(&fop_lock);
             return ECOP_WAITING;
         default:
+            pthread_mutex_unlock(&fop_lock);
             return ECOP_REJECT;
     }
     
